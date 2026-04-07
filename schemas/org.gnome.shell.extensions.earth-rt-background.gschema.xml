@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.earth-rt-background" path="/org/gnome/shell/extensions/earth-rt-background/">
+
+    <key name="show-indicator" type="b">
+      <default>true</default>
+      <summary>Whether to show the indicator</summary>
+      <description>Show the Earth RT Background icon in the top bar.</description>
+    </key>
+
+    <key name="latitude" type="d">
+      <default>50.8503</default>
+      <range min="-90.0" max="90.0"/>
+      <summary>Latitude of the observer position</summary>
+      <description>Latitude in degrees (−90 = South Pole, 90 = North Pole).</description>
+    </key>
+
+    <key name="longitude" type="d">
+      <default>4.3517</default>
+      <range min="-180.0" max="180.0"/>
+      <summary>Longitude of the observer position</summary>
+      <description>Longitude in degrees (−180 = West, 180 = East).</description>
+    </key>
+
+    <key name="altitude-km" type="i">
+      <default>500</default>
+      <range min="100" max="50000"/>
+      <summary>Altitude of the virtual observer (km)</summary>
+      <description>Distance above Earth's surface in kilometres.</description>
+    </key>
+
+    <key name="refresh-interval" type="i">
+      <default>15</default>
+      <range min="1" max="60"/>
+      <summary>Day/night overlay refresh interval (minutes)</summary>
+      <description>How often to recompute and redraw the day/night terminator.</description>
+    </key>
+
+    <key name="display-mode" type="s">
+      <default>'rectangular'</default>
+      <choices>
+        <choice value="rectangular"/>
+        <choice value="globe"/>
+      </choices>
+      <summary>Wallpaper display mode</summary>
+      <description>'rectangular' shows the equirectangular map with a CSS night overlay; 'globe' renders an orthographic sphere projection via cartopy.</description>
+    </key>
+
+  </schema>
+</schemalist>
