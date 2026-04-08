@@ -27,6 +27,7 @@ import sys
 import math
 import datetime
 
+import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # non-interactive backend – must be set before pyplot import
 import matplotlib.pyplot as plt
@@ -65,6 +66,25 @@ def _globe_fill_fraction(altitude_km):
 MAX_RENDER_SCALE = 4.0   # cap internal oversizing to keep memory/time reasonable
 
 
+def _draw_stars(fig, n_stars=2000, seed=42):
+    """Add a randomised starfield to the figure background layer."""
+    rng = np.random.default_rng(seed)
+    xs = rng.uniform(0, 1, n_stars)
+    ys = rng.uniform(0, 1, n_stars)
+    sizes = rng.uniform(0.1, 1.5, n_stars)
+    alphas = rng.uniform(0.3, 1.0, n_stars)
+
+    ax_bg = fig.add_axes([0, 0, 1, 1], zorder=0)
+    ax_bg.set_facecolor('black')
+    ax_bg.set_xlim(0, 1)
+    ax_bg.set_ylim(0, 1)
+    ax_bg.axis('off')
+
+    colors = np.ones((n_stars, 4))   # RGBA – white stars
+    colors[:, 3] = alphas
+    ax_bg.scatter(xs, ys, s=sizes, c=colors, linewidths=0, zorder=1)
+
+
 def render(src_path, dst_path, center_lat, center_lon, out_w, out_h, altitude_km=35786):
     dpi = 100
     fill = _globe_fill_fraction(altitude_km)
@@ -91,6 +111,13 @@ def render(src_path, dst_path, center_lat, center_lon, out_w, out_h, altitude_km
         dpi=dpi,
         facecolor='black',
     )
+
+    # Starfield: only drawn when the globe fits entirely on screen and black
+    # margins are visible.  The globe axes is made transparent so stars also
+    # show through the corners that fall outside the circular disc.
+    if fill <= 1.0:
+        _draw_stars(fig)
+
     ax = fig.add_axes(
         axes_rect,
         projection=ccrs.NearsidePerspective(
@@ -98,7 +125,7 @@ def render(src_path, dst_path, center_lat, center_lon, out_w, out_h, altitude_km
             central_latitude=center_lat,
             satellite_height=altitude_km * 1000,
         ),
-        facecolor='black',
+        facecolor='none' if fill <= 1.0 else 'black',
     )
     ax.set_global()
 

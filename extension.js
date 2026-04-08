@@ -46,9 +46,12 @@ export default class EarthRtBackground extends Extension {
 
     // Panel indicator
     this._indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
+    const iconFile = Gio.File.new_for_path(
+      GLib.build_filenamev([this.path, "icons", "earth-symbolic.svg"]),
+    );
     this._indicator.add_child(
       new St.Icon({
-        icon_name: "weather-clear-symbolic",
+        gicon: new Gio.FileIcon({ file: iconFile }),
         style_class: "system-status-icon",
       }),
     );
