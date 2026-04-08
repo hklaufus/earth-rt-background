@@ -24,83 +24,7 @@ const CACHE_DIR = GLib.build_filenamev([
 ]);
 const DAY_IMAGE_PATH = GLib.build_filenamev([CACHE_DIR, "day.png"]);
 const GLOBE_IMAGE_PATH = GLib.build_filenamev([CACHE_DIR, "globe.png"]);
-
-// Pixel dimensions of the equirectangular source image
-const IMAGE_W = 2048;
-const IMAGE_H = 1024;
-
-// ---------- Solar geometry (rectangular mode only) ----------
-
-/**
- * Return the sub-solar point (lat/lon where the Sun is overhead).
- * Used to position the CSS night overlay in rectangular mode.
- * Compact NOAA Solar Calculator approximation.
- */
-function getSubSolarPoint(date = new Date()) {
-  const jd = date / 86_400_000 + 2_440_587.5;
-  const n = jd - 2_451_545.0;
-  const L = (280.46 + 0.985_647_4 * n) % 360;
-  const g = (357.528 + 0.985_600_3 * n) % 360;
-  const lambda =
-    L +
-    1.915 * Math.sin((g * Math.PI) / 180) +
-    0.02 * Math.sin((2 * g * Math.PI) / 180);
-  const eps = 23.439 - 0.000_000_4 * n;
-  const decl =
-    (Math.asin(
-      Math.sin((eps * Math.PI) / 180) * Math.sin((lambda * Math.PI) / 180),
-    ) *
-      180) /
-    Math.PI;
-  const ra =
-    (Math.atan2(
-      Math.cos((eps * Math.PI) / 180) * Math.sin((lambda * Math.PI) / 180),
-      Math.cos((lambda * Math.PI) / 180),
-    ) *
-      180) /
-    Math.PI;
-  const gmst = (18.697_374_558 + 24.065_709_824_419_08 * n) % 24;
-  const hourAngle = gmst * 15 - ra;
-  return {
-    lat: decl,
-    lon: ((-hourAngle + 540) % 360) - 180,
-  };
-}
-
-// ---------- Night overlay CSS (rectangular mode only) ----------
-
-/**
- * Build the inline CSS for the night-side overlay widget.
- * Maps the anti-solar point from equirectangular image space to screen space,
- * compensating for GNOME's "zoom" (cover) wallpaper scaling.
- */
-function buildNightOverlayCss(subSolar, monitor) {
-  const night = {
-    lat: -subSolar.lat,
-    lon: ((subSolar.lon + 180) % 360) - 180,
-  };
-
-  const nx = (night.lon + 180) / 360;
-  const ny = (90 - night.lat) / 180;
-
-  const scale = Math.max(monitor.width / IMAGE_W, monitor.height / IMAGE_H);
-  const scaledW = IMAGE_W * scale;
-  const scaledH = IMAGE_H * scale;
-  const cropX = (scaledW - monitor.width) / 2;
-  const cropY = (scaledH - monitor.height) / 2;
-
-  const sx = Math.round(nx * scaledW - cropX);
-  const sy = Math.round(ny * scaledH - cropY);
-  const r = Math.round((IMAGE_W / 2) * scale);
-
-  return (
-    `background-image: radial-gradient(` +
-    `circle ${r}px at ${sx}px ${sy}px, ` +
-    `rgba(0,0,0,0.88) 0%, ` +
-    `rgba(0,0,0,0.75) 30%, ` +
-    `rgba(0,0,0,0) 60%);`
-  );
-}
+const RECT_IMAGE_PATH = GLib.build_filenamev([CACHE_DIR, "rect.png"]);
 
 // ---------- Extension ----------
 
@@ -108,11 +32,8 @@ export default class EarthRtBackground extends Extension {
   enable() {
     this._settings = this.getSettings();
     this._timeoutId = null;
-    this._nightOverlay = null;
     this._httpSession = null;
-    this._globeSubprocess = null;
-    this._currentMode = null;   // tracks the active mode to detect transitions
-    this._rectWallpaperSet = false;
+    this._renderSubprocess = null;
 
     // Save the current wallpaper so disable() can restore it
     const bgSettings = new Gio.Settings({
@@ -153,6 +74,9 @@ export default class EarthRtBackground extends Extension {
       this._settings.connect("changed::longitude", () =>
         this._updateWallpaper(),
       ),
+      this._settings.connect("changed::altitude-km", () =>
+        this._updateWallpaper(),
+      ),
     ];
 
     GLib.mkdir_with_parents(CACHE_DIR, 0o755);
@@ -169,14 +93,9 @@ export default class EarthRtBackground extends Extension {
       this._timeoutId = null;
     }
 
-    if (this._globeSubprocess) {
-      this._globeSubprocess.force_exit();
-      this._globeSubprocess = null;
-    }
-
-    if (this._nightOverlay) {
-      this._nightOverlay.destroy();
-      this._nightOverlay = null;
+    if (this._renderSubprocess) {
+      this._renderSubprocess.force_exit();
+      this._renderSubprocess = null;
     }
 
     if (this._indicator) {
@@ -195,34 +114,6 @@ export default class EarthRtBackground extends Extension {
 
     this._httpSession = null;
     this._settings = null;
-  }
-
-  // ---------- Night overlay (rectangular mode) ----------
-
-  _createNightOverlay() {
-    const monitor = Main.layoutManager.primaryMonitor;
-    if (!monitor) return;
-
-    this._nightOverlay = new St.Widget({
-      reactive: false,
-      can_focus: false,
-      track_hover: false,
-    });
-    this._nightOverlay.set_position(monitor.x, monitor.y);
-    this._nightOverlay.set_size(monitor.width, monitor.height);
-
-    Main.layoutManager._backgroundGroup.add_child(this._nightOverlay);
-    this._updateNightOverlay();
-  }
-
-  _updateNightOverlay() {
-    if (!this._nightOverlay) return;
-    const monitor = Main.layoutManager.primaryMonitor;
-    if (!monitor) return;
-
-    this._nightOverlay.set_style(
-      buildNightOverlayCss(getSubSolarPoint(new Date()), monitor),
-    );
   }
 
   // ---------- Scheduling ----------
@@ -256,34 +147,10 @@ export default class EarthRtBackground extends Extension {
 
   _updateWallpaper() {
     const mode = this._settings.get_string("display-mode");
-
-    // Handle mode transitions
-    if (mode !== this._currentMode) {
-      this._currentMode = mode;
-      this._rectWallpaperSet = false;
-
-      if (mode === "rectangular") {
-        if (!this._nightOverlay) this._createNightOverlay();
-      } else {
-        if (this._nightOverlay) {
-          this._nightOverlay.destroy();
-          this._nightOverlay = null;
-        }
-      }
-    }
-
     if (mode === "globe") {
-      // Globe: re-render on every tick (sub-solar point moves over time)
       this._ensureDayImage(() => this._renderGlobe());
     } else {
-      // Rectangular: update CSS overlay every tick; set wallpaper image once
-      this._updateNightOverlay();
-      if (!this._rectWallpaperSet) {
-        this._ensureDayImage(() => {
-          this._setWallpaper(DAY_IMAGE_PATH);
-          this._rectWallpaperSet = true;
-        });
-      }
+      this._ensureDayImage(() => this._renderRect());
     }
   }
 
@@ -349,46 +216,54 @@ export default class EarthRtBackground extends Extension {
     );
   }
 
-  // ---------- Rectangular wallpaper ----------
-
-  _setWallpaper(imagePath) {
-    const uri = Gio.File.new_for_path(imagePath).get_uri();
-    const bgSettings = new Gio.Settings({
-      schema: "org.gnome.desktop.background",
-    });
-    bgSettings.set_string("picture-uri", uri);
-    bgSettings.set_string("picture-uri-dark", uri);
-    bgSettings.set_string("picture-options", "zoom");
-  }
-
-  // ---------- Globe rendering ----------
+  // ---------- Rendering ----------
 
   _renderGlobe() {
-    // Cancel any in-flight render before starting a new one
-    if (this._globeSubprocess) {
-      this._globeSubprocess.force_exit();
-      this._globeSubprocess = null;
-    }
-
     const monitor = Main.layoutManager.primaryMonitor;
     if (!monitor) return;
 
     const centerLat = this._settings.get_double("latitude");
     const centerLon = this._settings.get_double("longitude");
+    const altitudeKm = this._settings.get_int("altitude-km");
+
+    this._spawnRenderer(
+      [
+        DAY_IMAGE_PATH, GLOBE_IMAGE_PATH,
+        String(centerLat), String(centerLon),
+        String(monitor.width), String(monitor.height),
+        String(altitudeKm), "globe",
+      ],
+      () => this._setRenderedWallpaper(GLOBE_IMAGE_PATH),
+    );
+  }
+
+  _renderRect() {
+    const monitor = Main.layoutManager.primaryMonitor;
+    if (!monitor) return;
+
+    this._spawnRenderer(
+      [
+        DAY_IMAGE_PATH, RECT_IMAGE_PATH,
+        "0", "0",
+        String(monitor.width), String(monitor.height),
+        "0", "rect",
+      ],
+      () => this._setRenderedWallpaper(RECT_IMAGE_PATH),
+    );
+  }
+
+  _spawnRenderer(args, onSuccess) {
+    // Cancel any in-flight render before starting a new one
+    if (this._renderSubprocess) {
+      this._renderSubprocess.force_exit();
+      this._renderSubprocess = null;
+    }
+
     const scriptPath = GLib.build_filenamev([this.path, "render-globe.py"]);
 
     try {
-      this._globeSubprocess = Gio.Subprocess.new(
-        [
-          "python3",
-          scriptPath,
-          DAY_IMAGE_PATH,
-          GLOBE_IMAGE_PATH,
-          String(centerLat),
-          String(centerLon),
-          String(monitor.width),
-          String(monitor.height),
-        ],
+      this._renderSubprocess = Gio.Subprocess.new(
+        ["python3", scriptPath, ...args],
         Gio.SubprocessFlags.NONE,
       );
     } catch (e) {
@@ -396,7 +271,7 @@ export default class EarthRtBackground extends Extension {
       return;
     }
 
-    this._globeSubprocess.wait_async(null, (_proc, result) => {
+    this._renderSubprocess.wait_async(null, (_proc, result) => {
       try {
         _proc.wait_finish(result);
       } catch (e) {
@@ -404,10 +279,10 @@ export default class EarthRtBackground extends Extension {
         return;
       }
 
-      this._globeSubprocess = null;
+      this._renderSubprocess = null;
 
       if (_proc.get_successful()) {
-        this._setGlobeWallpaper(GLOBE_IMAGE_PATH);
+        onSuccess();
       } else {
         console.error(
           `${this.metadata.name}: render-globe.py exited with an error – ` +
@@ -417,7 +292,7 @@ export default class EarthRtBackground extends Extension {
     });
   }
 
-  _setGlobeWallpaper(imagePath) {
+  _setRenderedWallpaper(imagePath) {
     const uri = Gio.File.new_for_path(imagePath).get_uri();
     const bgSettings = new Gio.Settings({
       schema: "org.gnome.desktop.background",
