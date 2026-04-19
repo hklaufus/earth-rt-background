@@ -14,15 +14,21 @@ import {
   gettext as _,
 } from "resource:///org/gnome/shell/extensions/extension.js";
 
-// NASA Scientific Visualization Studio – Blue Marble 2048 × 1024 PNG
-const DAY_IMAGE_URL =
-  "https://svs.gsfc.nasa.gov/vis/a000000/a002900/a002915/bluemarble-2048.png";
+// NASA NEO – Blue Marble Next Generation (with topography & bathymetry), monthly, 5400×2700
+// Month is zero-padded (01–12); images are from the 2004 reference year.
+function _dayImageUrl(month) {
+  const mm = String(month).padStart(2, "0");
+  return `https://neo.gsfc.nasa.gov/archive/bluemarble/bmng/world_8km/world.2004${mm}.3x5400x2700.png`;
+}
 
 const CACHE_DIR = GLib.build_filenamev([
   GLib.get_user_cache_dir(),
   "earth-rt-background",
 ]);
-const DAY_IMAGE_PATH = GLib.build_filenamev([CACHE_DIR, "day.png"]);
+function _dayImagePath(month) {
+  const mm = String(month).padStart(2, "0");
+  return GLib.build_filenamev([CACHE_DIR, `day_${mm}.png`]);
+}
 const GLOBE_IMAGE_PATH = GLib.build_filenamev([CACHE_DIR, "globe.png"]);
 const RECT_IMAGE_PATH = GLib.build_filenamev([CACHE_DIR, "rect.png"]);
 
@@ -149,28 +155,31 @@ export default class EarthRtBackground extends Extension {
   // ---------- Wallpaper update ----------
 
   _updateWallpaper() {
+    const month = new Date().getMonth() + 1; // 1–12
+    const dayPath = _dayImagePath(month);
+    const url = _dayImageUrl(month);
     const mode = this._settings.get_string("display-mode");
     if (mode === "globe") {
-      this._ensureDayImage(() => this._renderGlobe());
+      this._ensureDayImage(url, dayPath, () => this._renderGlobe(dayPath));
     } else {
-      this._ensureDayImage(() => this._renderRect());
+      this._ensureDayImage(url, dayPath, () => this._renderRect(dayPath));
     }
   }
 
   // ---------- Day image (shared by both modes) ----------
 
-  _ensureDayImage(onReady) {
-    if (Gio.File.new_for_path(DAY_IMAGE_PATH).query_exists(null)) {
+  _ensureDayImage(url, dayPath, onReady) {
+    if (Gio.File.new_for_path(dayPath).query_exists(null)) {
       onReady();
     } else {
-      this._downloadDayImage(onReady);
+      this._downloadDayImage(url, dayPath, onReady);
     }
   }
 
-  _downloadDayImage(onComplete) {
+  _downloadDayImage(url, dayPath, onComplete) {
     if (!this._httpSession) this._httpSession = new Soup.Session();
 
-    const message = Soup.Message.new("GET", DAY_IMAGE_URL);
+    const message = Soup.Message.new("GET", url);
     this._httpSession.send_async(
       message,
       GLib.PRIORITY_DEFAULT,
@@ -184,7 +193,7 @@ export default class EarthRtBackground extends Extension {
           return;
         }
 
-        const outFile = Gio.File.new_for_path(DAY_IMAGE_PATH);
+        const outFile = Gio.File.new_for_path(dayPath);
         let outputStream;
         try {
           outputStream = outFile.replace(
@@ -221,7 +230,7 @@ export default class EarthRtBackground extends Extension {
 
   // ---------- Rendering ----------
 
-  _renderGlobe() {
+  _renderGlobe(dayPath) {
     const monitor = Main.layoutManager.primaryMonitor;
     if (!monitor) return;
 
@@ -231,7 +240,7 @@ export default class EarthRtBackground extends Extension {
 
     this._spawnRenderer(
       [
-        DAY_IMAGE_PATH, GLOBE_IMAGE_PATH,
+        dayPath, GLOBE_IMAGE_PATH,
         String(centerLat), String(centerLon),
         String(monitor.width), String(monitor.height),
         String(altitudeKm), "globe",
@@ -240,13 +249,13 @@ export default class EarthRtBackground extends Extension {
     );
   }
 
-  _renderRect() {
+  _renderRect(dayPath) {
     const monitor = Main.layoutManager.primaryMonitor;
     if (!monitor) return;
 
     this._spawnRenderer(
       [
-        DAY_IMAGE_PATH, RECT_IMAGE_PATH,
+        dayPath, RECT_IMAGE_PATH,
         "0", "0",
         String(monitor.width), String(monitor.height),
         "0", "rect",
