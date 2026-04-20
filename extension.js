@@ -53,7 +53,7 @@ export default class EarthRtBackground extends Extension {
     // Panel indicator
     this._indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
     const iconFile = Gio.File.new_for_path(
-      GLib.build_filenamev([this.path, "icons", "earth-symbolic.svg"]),
+      GLib.build_filenamev([this.path, "icons", "earth.svg"]),
     );
     this._indicator.add_child(
       new St.Icon({
