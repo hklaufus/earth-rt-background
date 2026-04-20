@@ -47,6 +47,7 @@ The extension follows the standard GNOME Shell extension layout for Shell versio
 | `metadata.json` | Extension metadata and supported shell versions |
 | `schemas/org.gnome.shell.extensions.earth-rt-background.gschema.xml` | GSettings schema |
 | `stylesheet.css` | Extension CSS |
+| `icons/earth-symbolic.svg` | Top Bar indicator icon — Earth's planetary symbol ⊕ (circle with crosshair) |
 
 ### GSettings keys
 
