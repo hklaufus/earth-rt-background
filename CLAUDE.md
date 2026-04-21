@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Earth RT Background** is a GNOME Shell extension (`uuid: earth-rt-background@hans.klaufus`) that renders a live Earth-from-space desktop wallpaper with real-time day/night shading, configured via a Top Bar indicator and preferences dialogue.
+**Earth RT Background** is a GNOME Shell extension (`uuid: earth-rt-background.s5yvj@passmail.net`) that renders a live Earth-from-space desktop wallpaper with real-time day/night shading, configured via a Top Bar indicator and preferences dialogue.
 
 Target: GNOME Shell 49.
 
@@ -12,7 +12,7 @@ Target: GNOME Shell 49.
 
 ```bash
 # Install (copy) the extension into GNOME Shell's extension directory
-cp -r . ~/.local/share/gnome-shell/extensions/earth-rt-background@hans.klaufus/
+cp -r . ~/.local/share/gnome-shell/extensions/earth-rt-background.s5yvj@passmail.net/
 
 # Compile GSettings schema (required after editing the .gschema.xml file)
 glib-compile-schemas schemas/
@@ -21,14 +21,14 @@ glib-compile-schemas schemas/
 dbus-run-session gnome-shell --devkit --wayland
 
 # Enable/disable the extension
-gnome-extensions enable earth-rt-background@hans.klaufus
-gnome-extensions disable earth-rt-background@hans.klaufus
+gnome-extensions enable earth-rt-background.s5yvj@passmail.net
+gnome-extensions disable earth-rt-background.s5yvj@passmail.net
 
 # Reload the extension after changes (without restarting the shell)
-gnome-extensions disable earth-rt-background@hans.klaufus && gnome-extensions enable earth-rt-background@hans.klaufus
+gnome-extensions disable earth-rt-background.s5yvj@passmail.net && gnome-extensions enable earth-rt-background.s5yvj@passmail.net
 
 # Open preferences
-gnome-extensions prefs earth-rt-background@hans.klaufus
+gnome-extensions prefs earth-rt-background.s5yvj@passmail.net
 
 # View live logs from the extension
 journalctl -f -o cat /usr/bin/gnome-shell
