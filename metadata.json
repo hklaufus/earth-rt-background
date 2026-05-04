@@ -3,7 +3,7 @@
   "description": "Set the Earth as desktop background, update day / night-time based on location and clock.",
   "uuid": "earth-rt-background@hans.klaufus",
   "shell-version": [
-    "49"
+    "49", "50"
   ],
   "settings-schema": "org.gnome.shell.extensions.earth-rt-background"
 }

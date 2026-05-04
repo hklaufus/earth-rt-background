@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Earth RT Background** is a GNOME Shell extension (`uuid: earth-rt-background@hans.klaufus`) that renders a live Earth-from-space desktop wallpaper with real-time day/night shading, configured via a Top Bar indicator and preferences dialogue.
 
-Target: GNOME Shell 49.
+Target: GNOME Shell 49 and 50.
 
 ## Development Commands
 
