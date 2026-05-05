@@ -193,10 +193,19 @@ export default class EarthRtBackground extends Extension {
           return;
         }
 
-        const outFile = Gio.File.new_for_path(dayPath);
+        const status = message.get_status();
+        if (status !== Soup.Status.OK) {
+          console.error(`${this.metadata.name}: download failed with HTTP ${status}`);
+          return;
+        }
+
+        // Write to a temp file; rename to dayPath only on success so a
+        // partial download never poisons the cache.
+        const tmpPath = `${dayPath}.tmp`;
+        const tmpFile = Gio.File.new_for_path(tmpPath);
         let outputStream;
         try {
-          outputStream = outFile.replace(
+          outputStream = tmpFile.replace(
             null,
             false,
             Gio.FileCreateFlags.REPLACE_DESTINATION,
@@ -216,12 +225,28 @@ export default class EarthRtBackground extends Extension {
           (_stream, spliceResult) => {
             try {
               _stream.splice_finish(spliceResult);
-              onComplete();
             } catch (e) {
               console.error(
                 `${this.metadata.name}: failed to write image: ${e}`,
               );
+              tmpFile.delete(null);
+              return;
             }
+
+            try {
+              tmpFile.move(
+                Gio.File.new_for_path(dayPath),
+                Gio.FileCopyFlags.OVERWRITE,
+                null,
+                null,
+              );
+            } catch (e) {
+              console.error(`${this.metadata.name}: failed to move image into cache: ${e}`);
+              tmpFile.delete(null);
+              return;
+            }
+
+            onComplete();
           },
         );
       },

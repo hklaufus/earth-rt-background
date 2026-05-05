@@ -42,8 +42,9 @@ The extension follows the standard GNOME Shell extension layout for Shell versio
 
 | File | Purpose |
 |------|---------|
-| `extension.js` | Main extension logic — panel indicator, popup dialog, day/night rendering |
-| `prefs.js` | Preferences window (Adw-based) — city, altitude, refresh interval |
+| `extension.js` | Main extension logic — panel indicator, wallpaper update loop, download, subprocess dispatch |
+| `render-globe.py` | Python renderer — cartopy globe or rectangular projection with Nightshade terminator |
+| `prefs.js` | Preferences window (Adw-based) — display mode, city preset, lat/lon, altitude, refresh interval |
 | `metadata.json` | Extension metadata and supported shell versions |
 | `schemas/org.gnome.shell.extensions.earth-rt-background.gschema.xml` | GSettings schema |
 | `stylesheet.css` | Extension CSS |
@@ -53,26 +54,27 @@ The extension follows the standard GNOME Shell extension layout for Shell versio
 
 | Key | Type | Default | Purpose |
 |-----|------|---------|---------|
-| `city-name` | string | `'Brussels'` | Centre point city for the Earth view |
-| `altitude-km` | int | `500` | Observer altitude in km |
+| `display-mode` | string | `'rectangular'` | `'rectangular'` or `'globe'` |
+| `latitude` | double | `50.8503` | Observer latitude in degrees |
+| `longitude` | double | `4.3517` | Observer longitude in degrees |
+| `altitude-km` | int | `500` | Observer altitude in km (globe mode) |
 | `refresh-interval` | int | `15` | Wallpaper refresh interval in minutes |
 | `show-indicator` | bool | `true` | Whether to show the Top Bar indicator |
 
-### Rendering approach (current prototype)
+### Rendering approach
 
-1. **Day texture** — fetched from NASA SVS (`svs.gsfc.nasa.gov/vis/…/bluemarble-2048.png`, 2048×1024 PNG) and cached locally in `~/.cache/earth-rt-background/day.png`.
-2. **Night texture** — VIIRS Black Marble tile from NASA GIBS WMTS.
-3. **Sub-solar point** — computed with a compact NOAA-based approximation in `getSubSolarPoint()`.
-4. **Day/night mask** — a CSS `radial-gradient` centred on the anti-solar point, applied as `mask-image` on a `St.Bin` container.
+1. **Day texture** — fetched from NASA NEO Blue Marble Next Generation (5400×2700 PNG, monthly), keyed by month and cached in `~/.cache/earth-rt-background/day_MM.png`. Downloads use a temp-file/rename pattern so a failed or partial download never corrupts the cache.
+2. **Renderer** — `render-globe.py` is spawned as a subprocess via `Gio.Subprocess`. It uses `cartopy` and `matplotlib` (Agg backend) to render the Blue Marble texture through either `NearsidePerspective` (globe mode) or `PlateCarree` (rectangular mode).
+3. **Day/night terminator** — drawn by `cartopy.feature.nightshade.Nightshade` using the current UTC time; no explicit solar-coordinate computation is needed.
+4. **Globe mode extras** — a randomised starfield is drawn behind the globe disc; at low altitudes the renderer tiles a larger canvas and crops to the screen size.
+5. **Wallpaper application** — the output PNG is applied via `Gio.Settings` (`org.gnome.desktop.background`) `picture-uri` / `picture-uri-dark`; the previous wallpaper is saved in `enable()` and restored in `disable()`.
 
-The wallpaper update cycle is driven by `GLib.timeout_add_seconds` using the `refresh-interval` setting.
+The update cycle is driven by `GLib.timeout_add_seconds` (`_armTimer`) using the `refresh-interval` setting. `_scheduleRefresh()` triggers an immediate render on `enable()` and then arms the repeating timer.
 
-### Planned / incomplete features (visible in commented-out code)
+### Runtime dependencies
 
-- `GSettings` bindings in `prefs.js` — city and altitude rows exist in the UI but are not yet bound to settings.
-- `_scheduleRefresh()` is implemented but not called from `enable()`.
-- The actual desktop background setting (via `Gio.Settings` `org.gnome.desktop.background`) is not yet implemented — the current popup is a `ModalDialog`, not a true wallpaper.
-- The `cityToLatLon()` table is a stub; a proper geocoder is needed.
+- `python3-cartopy` — cartopy projections and Nightshade (Fedora: `sudo dnf install python3-cartopy`)
+- `python3-matplotlib` — rendering backend
 
 ## GNOME Shell Extension Conventions
 
